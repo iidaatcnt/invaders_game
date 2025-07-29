@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>明るいインベーダーゲーム</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #87CEEB, #98FB98);
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .game-container {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        canvas {
+            border: 3px solid #FFD700;
+            border-radius: 10px;
+            background: linear-gradient(180deg, #87CEFA, #F0F8FF);
+        }
+        
+        .score {
+            font-size: 24px;
+            color: #FF6347;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        
+        .controls {
+            margin-top: 15px;
+            color: #4169E1;
+            font-size: 16px;
+        }
+        
+        .game-over {
+            font-size: 28px;
+            color: #FF4500;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        
+        button {
+            background: #32CD32;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #228B22;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1 style="color: #FF69B4; margin-bottom: 20px; font-size: 24px;">🚀 スペースインベーダー風味 🛸</h1>
+        <div class="score">スコア: <span id="score">0</span></div>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div class="controls">
+            ← → キーで移動、スペースキーで発射
+        </div>
+        <div id="gameOver" class="game-over" style="display: none;">
+            ゲームオーバー！
+            <br>
+            <button onclick="restartGame()">もう一度遊ぶ</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const gameOverElement = document.getElementById('gameOver');
+
+        // ゲーム状態
+        let gameRunning = true;
+        let score = 0;
+        let keys = {};
+        let animationFrame = 0;
+
+        // プレイヤー
+        const player = {
+            x: canvas.width / 2 - 25,
+            y: canvas.height - 80,
+            width: 50,
+            height: 30,
+            speed: 5,
+            color: '#FF6347'
+        };
+
+        // 弾丸
+        let bullet = null;
+
+        // インベーダー
+        const invaders = [];
+        const invaderRows = 4;
+        const invaderCols = 8;
+        const invaderWidth = 40;
+        const invaderHeight = 30;
+        let invaderSpeed = 1;
+
+        // インベーダーの初期化
+        function initInvaders() {
+            invaders.length = 0;
+            const invaderColors = ['#FF69B4', '#00CED1', '#FFD700', '#98FB98'];
+            
+            for (let row = 0; row < invaderRows; row++) {
+                for (let col = 0; col < invaderCols; col++) {
+                    invaders.push({
+                        x: col * (invaderWidth + 20) + 100,
+                        y: row * (invaderHeight + 15) + 50,
+                        width: invaderWidth,
+                        height: invaderHeight,
+                        alive: true,
+                        color: invaderColors[row % invaderColors.length],
+                        points: (3 - (row % 4)) * 10 + 10 // 上の段ほど高得点
+                    });
+                }
+            }
+        }
+
+        // 効果音を生成する関数
+        function playSound(frequency, duration, type = 'sine') {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            oscillator.type = type;
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        // 発射音
+        function playShootSound() {
+            playSound(800, 0.1, 'square');
+        }
+
+        // 命中音
+        function playHitSound() {
+            playSound(400, 0.2, 'sawtooth');
+            setTimeout(() => playSound(600, 0.1, 'sine'), 100);
+        }
+
+        // 勝利音
+        function playVictorySound() {
+            playSound(523, 0.2, 'sine'); // ド
+            setTimeout(() => playSound(659, 0.2, 'sine'), 200); // ミ
+            setTimeout(() => playSound(784, 0.2, 'sine'), 400); // ソ
+            setTimeout(() => playSound(1047, 0.4, 'sine'), 600); // 高いド
+        }
+
+        // 敗北音
+        function playDefeatSound() {
+            playSound(200, 0.3, 'sawtooth');
+            setTimeout(() => playSound(150, 0.3, 'sawtooth'), 300);
+            setTimeout(() => playSound(100, 0.5, 'sawtooth'), 600);
+        }
+
+        // キーボードイベント
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            
+            if ((e.code === 'Space' || e.key === ' ') && gameRunning) {
+                e.preventDefault();
+                if (!bullet) {
+                    bullet = {
+                        x: player.x + player.width / 2 - 3,
+                        y: player.y,
+                        width: 6,
+                        height: 15,
+                        speed: 8,
+                        color: '#FF0000'
+                    };
+                    playShootSound();
+                }
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+
+        // プレイヤーの更新
+        function updatePlayer() {
+            if (keys['ArrowLeft'] && player.x > 0) {
+                player.x -= player.speed;
+            }
+            if (keys['ArrowRight'] && player.x < canvas.width - player.width) {
+                player.x += player.speed;
+            }
+        }
+
+        // 弾丸の更新
+        function updateBullet() {
+            if (bullet) {
+                bullet.y -= bullet.speed;
+                
+                // 画面外に出たら削除
+                if (bullet.y < 0) {
+                    bullet = null;
+                }
+            }
+        }
+
+        // インベーダーの更新
+        function updateInvaders() {
+            let moveDown = false;
+            
+            // 端に到達したかチェック（生きているインベーダーのみ）
+            for (let invader of invaders) {
+                if (!invader.alive) continue;
+                
+                if ((invaderSpeed > 0 && invader.x >= canvas.width - invader.width) ||
+                    (invaderSpeed < 0 && invader.x <= 0)) {
+                    moveDown = true;
+                    break;
+                }
+            }
+            
+            if (moveDown) {
+                // 1段下に移動して方向転換
+                for (let invader of invaders) {
+                    if (!invader.alive) continue;
+                    invader.y += 40;
+                }
+                invaderSpeed *= -1;
+            } else {
+                // 左右に移動
+                for (let invader of invaders) {
+                    if (!invader.alive) continue;
+                    invader.x += invaderSpeed;
+                }
+            }
+        }
+
+        // 衝突検出
+        function checkCollisions() {
+            if (!bullet) return;
+            
+            for (let invader of invaders) {
+                if (!invader.alive) continue;
+                
+                if (bullet.x < invader.x + invader.width &&
+                    bullet.x + bullet.width > invader.x &&
+                    bullet.y < invader.y + invader.height &&
+                    bullet.y + bullet.height > invader.y) {
+                    
+                    // 命中
+                    invader.alive = false;
+                    bullet = null;
+                    score += invader.points;
+                    scoreElement.textContent = score;
+                    playHitSound();
+                    
+                    // 勝利条件チェック
+                    if (invaders.every(inv => !inv.alive)) {
+                        gameRunning = false;
+                        playVictorySound();
+                        showVictoryAnimation();
+                    }
+                    break;
+                }
+            }
+        }
+
+        // 勝利アニメーション
+        function showVictoryAnimation() {
+            let sparkles = [];
+            for (let i = 0; i < 20; i++) {
+                sparkles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 10 + 5,
+                    color: `hsl(${Math.random() * 360}, 70%, 60%)`,
+                    velocity: { x: (Math.random() - 0.5) * 4, y: (Math.random() - 0.5) * 4 }
+                });
+            }
+            
+            let animationTime = 0;
+            function animate() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // 背景のグラデーション
+                const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+                gradient.addColorStop(0, `hsl(${animationTime * 2}, 50%, 80%)`);
+                gradient.addColorStop(1, `hsl(${animationTime * 2 + 60}, 50%, 80%)`);
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // キラキラエフェクト
+                sparkles.forEach(sparkle => {
+                    ctx.fillStyle = sparkle.color;
+                    ctx.beginPath();
+                    ctx.arc(sparkle.x, sparkle.y, sparkle.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    sparkle.x += sparkle.velocity.x;
+                    sparkle.y += sparkle.velocity.y;
+                    sparkle.size *= 0.99;
+                });
+                
+                // 勝利メッセージ
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 48px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('🎉 GAME CLEAR! 🎉', canvas.width / 2, canvas.height / 2 - 50);
+                
+                ctx.font = 'bold 32px Arial';
+                ctx.fillText(`Score: ${score}`, canvas.width / 2, canvas.height / 2 + 20);
+                
+                animationTime++;
+                if (animationTime < 180) {
+                    requestAnimationFrame(animate);
+                } else {
+                    setTimeout(() => {
+                        gameOverElement.innerHTML = `
+                            <div style="color: #32CD32; font-size: 32px; margin-bottom: 15px;">🎉 ゲームクリア！ 🎉</div>
+                            <div style="color: #FF6347; font-size: 24px; margin-bottom: 20px;">最終スコア: ${score}点</div>
+                            <button onclick="restartGame()">もう一度遊ぶ</button>
+                        `;
+                        gameOverElement.style.display = 'block';
+                    }, 500);
+                }
+            }
+            animate();
+        }
+
+        // 敗北アニメーション
+        function showDefeatAnimation() {
+            let shakeIntensity = 20;
+            let animationTime = 0;
+            
+            function animate() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // 画面を揺らす
+                ctx.save();
+                ctx.translate(
+                    (Math.random() - 0.5) * shakeIntensity,
+                    (Math.random() - 0.5) * shakeIntensity
+                );
+                
+                // 暗い背景
+                ctx.fillStyle = `rgba(139, 0, 0, ${0.3 + Math.sin(animationTime * 0.3) * 0.2})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // プレイヤーを描画
+                ctx.fillStyle = player.color;
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+                
+                // 生きているインベーダーを描画
+                const invaderTypes = ['(*-*)', '(*=*)', '(*+*)', '(o+o)'];
+                for (let invader of invaders) {
+                    if (!invader.alive) continue;
+                    
+                    ctx.fillStyle = invader.color;
+                    ctx.fillRect(invader.x, invader.y, invader.width, invader.height);
+                    
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.font = 'bold 14px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(
+                        invaderTypes[Math.floor(animationTime / 10) % invaderTypes.length],
+                        invader.x + invader.width / 2,
+                        invader.y + invader.height / 2 + 5
+                    );
+                }
+                
+                // 敗北メッセージ
+                ctx.fillStyle = '#FF0000';
+                ctx.font = 'bold 48px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2);
+                
+                ctx.restore();
+                
+                shakeIntensity *= 0.95;
+                animationTime++;
+                
+                if (animationTime < 120) {
+                    requestAnimationFrame(animate);
+                } else {
+                    gameOverElement.innerHTML = `
+                        <div style="color: #FF4500; font-size: 28px; margin-bottom: 15px;">ゲームオーバー</div>
+                        <div style="color: #FF6347; font-size: 20px; margin-bottom: 20px;">最終スコア: ${score}点</div>
+                        <button onclick="restartGame()">もう一度遊ぶ</button>
+                    `;
+                    gameOverElement.style.display = 'block';
+                }
+            }
+            animate();
+        }
+
+        // ゲームオーバーチェック
+        function checkGameOver() {
+            for (let invader of invaders) {
+                if (invader.alive && invader.y + invader.height >= player.y) {
+                    gameRunning = false;
+                    playDefeatSound();
+                    showDefeatAnimation();
+                    return;
+                }
+            }
+        }
+
+        // 描画関数
+        function draw() {
+            // 背景をクリア
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // プレイヤーを描画
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            
+            // プレイヤーの詳細を描画
+            ctx.fillStyle = '#FFE4B5';
+            ctx.fillRect(player.x + 20, player.y + 5, 10, 10);
+            
+            // 弾丸を描画
+            if (bullet) {
+                // メインの弾丸（赤色）
+                ctx.fillStyle = bullet.color;
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+                
+                // 弾丸の光沢効果（明るい赤）
+                ctx.fillStyle = '#FF6666';
+                ctx.fillRect(bullet.x + 1, bullet.y, bullet.width - 2, bullet.height);
+                
+                // 中央のハイライト（白）
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(bullet.x + 2, bullet.y, 2, bullet.height);
+            }
+            
+            // インベーダーを描画
+            for (let invader of invaders) {
+                if (!invader.alive) continue;
+                
+                // 背景色
+                ctx.fillStyle = invader.color;
+                ctx.fillRect(invader.x, invader.y, invader.width, invader.height);
+                
+                // アニメーションする顔文字
+                const invaderTypes = ['(*-*)', '(*=*)', '(*+*)', '(o+o)'];
+                const currentFace = invaderTypes[Math.floor(animationFrame / 30) % invaderTypes.length];
+                
+                // 文字を描画
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(
+                    currentFace, 
+                    invader.x + invader.width / 2, 
+                    invader.y + invader.height / 2 + 5
+                );
+                
+                // 影効果
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.fillText(
+                    currentFace, 
+                    invader.x + invader.width / 2 + 1, 
+                    invader.y + invader.height / 2 + 6
+                );
+            }
+        }
+
+        // ゲームループ
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            animationFrame++;
+            updatePlayer();
+            updateBullet();
+            updateInvaders();
+            checkCollisions();
+            checkGameOver();
+            draw();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        // ゲーム再開始
+        function restartGame() {
+            gameRunning = true;
+            score = 0;
+            animationFrame = 0;
+            scoreElement.textContent = score;
+            gameOverElement.style.display = 'none';
+            bullet = null;
+            player.x = canvas.width / 2 - 25;
+            invaderSpeed = 1; // スピードもリセット
+            initInvaders();
+            gameLoop();
+        }
+
+        // ゲーム開始
+        initInvaders();
+        gameLoop();
+    </script>
+</body>
+</html>
