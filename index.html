@@ -192,10 +192,20 @@
             playSound(800, 0.1, 'square');
         }
 
-        // 命中音
+        // 命中音（強化版 - より確実に再生）
         function playHitSound() {
-            playSound(400, 0.2, 'sawtooth');
-            setTimeout(() => playSound(600, 0.1, 'sine'), 100);
+            try {
+                playSound(400, 0.2, 'sawtooth');
+                setTimeout(() => {
+                    try {
+                        playSound(600, 0.1, 'sine');
+                    } catch (e) {
+                        console.log('Hit sound 2 playback failed:', e);
+                    }
+                }, 100);
+            } catch (e) {
+                console.log('Hit sound 1 playback failed:', e);
+            }
         }
 
         // 勝利音
@@ -338,14 +348,19 @@
                     bullet = null;
                     score += invader.points;
                     scoreElement.textContent = score;
+                    
+                    // ヒット音を確実に再生（勝利条件チェック前）
                     playHitSound();
                     
-                    // 勝利条件チェック
-                    if (invaders.every(inv => !inv.alive)) {
-                        gameRunning = false;
-                        playVictorySound();
-                        showVictoryAnimation();
-                    }
+                    // 勝利条件チェック（わずかに遅延して実行）
+                    setTimeout(() => {
+                        if (invaders.every(inv => !inv.alive)) {
+                            gameRunning = false;
+                            playVictorySound();
+                            showVictoryAnimation();
+                        }
+                    }, 50); // 50ms遅延でヒット音の再生を確実にする
+                    
                     break;
                 }
             }
