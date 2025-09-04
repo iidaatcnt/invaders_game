@@ -104,11 +104,26 @@
             color: '#FF6347'
         };
 
-        // 弾丸
-        let bullet = null;
+        // 弾丸（複数対応）
+        let bullets = [];
         
         // 蜂の針
         let beeStingers = [];
+        
+        // パワーアップシステム
+        let powerUps = [];
+        let playerPowerUps = {
+            rapidFire: 0,      // 連射モード残り時間
+            wideSpray: 0,      // ワイドスプレー残り時間
+            pierce: 0,         // 貫通スプレー残り時間
+            shield: 0,         // シールド残り枚数
+            homing: 0          // ホーミング残り時間
+        };
+        
+        // コンボシステム
+        let combo = 0;
+        let comboTimer = 0;
+        const COMBO_TIMEOUT = 180; // 3秒でコンボリセット
 
         // インベーダー
         const invaders = [];
@@ -167,6 +182,117 @@
                 ctx.fillRect(this.x + 1, this.y, 1, this.height - 2);
             }
         }
+        
+        // 弾丸クラス
+        class Bullet {
+            constructor(x, y, dx = 0, dy = -4, type = 'normal') {
+                this.x = x;
+                this.y = y;
+                this.dx = dx;
+                this.dy = dy;
+                this.width = 6;
+                this.height = 10;
+                this.type = type; // 'normal', 'wide', 'pierce', 'homing'
+                this.pierced = []; // 貫通で既に当たった敵のID
+                this.homingTarget = null;
+            }
+            
+            update() {
+                // ホーミング処理
+                if (this.type === 'homing' && !this.homingTarget) {
+                    this.findHomingTarget();
+                }
+                
+                if (this.type === 'homing' && this.homingTarget && this.homingTarget.alive) {
+                    const targetX = this.homingTarget.x + this.homingTarget.width / 2;
+                    const targetY = this.homingTarget.y + this.homingTarget.height / 2;
+                    const angle = Math.atan2(targetY - this.y, targetX - this.x);
+                    this.dx = Math.cos(angle) * 3;
+                    this.dy = Math.sin(angle) * 3;
+                }
+                
+                this.x += this.dx;
+                this.y += this.dy;
+            }
+            
+            findHomingTarget() {
+                let closest = null;
+                let minDistance = Infinity;
+                
+                for (let invader of invaders) {
+                    if (!invader.alive) continue;
+                    const distance = Math.hypot(
+                        invader.x - this.x,
+                        invader.y - this.y
+                    );
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closest = invader;
+                    }
+                }
+                
+                this.homingTarget = closest;
+            }
+        }
+        
+        // パワーアップアイテムクラス
+        class PowerUp {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.type = type; // 'rapid', 'wide', 'pierce', 'shield', 'homing'
+                this.width = 20;
+                this.height = 20;
+                this.speed = 1;
+                this.collected = false;
+                this.animFrame = 0;
+            }
+            
+            update() {
+                this.y += this.speed;
+                this.animFrame++;
+            }
+            
+            draw() {
+                const centerX = this.x + this.width / 2;
+                const centerY = this.y + this.height / 2;
+                const pulse = Math.sin(this.animFrame * 0.2) * 0.3 + 1;
+                
+                // パワーアップの背景円
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, this.width/2 * pulse, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // タイプ別のアイコン
+                ctx.fillStyle = this.getColor();
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.getSymbol(), centerX, centerY + 4);
+            }
+            
+            getColor() {
+                const colors = {
+                    rapid: '#FF6347',
+                    wide: '#32CD32',
+                    pierce: '#FFD700',
+                    shield: '#87CEEB',
+                    homing: '#FF69B4'
+                };
+                return colors[this.type] || '#FFFFFF';
+            }
+            
+            getSymbol() {
+                const symbols = {
+                    rapid: '⚡',
+                    wide: '🌪️',
+                    pierce: '➤',
+                    shield: '🛡️',
+                    homing: '🎯'
+                };
+                return symbols[this.type] || '?';
+            }
+        }
 
         // 効果音を生成する関数
         function playSound(frequency, duration, type = 'sine') {
@@ -221,6 +347,19 @@
             playSound(300, 0.3, 'sawtooth'); // 低い音
             setTimeout(() => playSound(250, 0.3, 'sawtooth'), 200); // もっと低い音
             setTimeout(() => playSound(200, 0.5, 'sawtooth'), 400); // 最低音
+        }
+        
+        // パワーアップ音
+        function playPowerUpSound() {
+            playSound(800, 0.1, 'sine');
+            setTimeout(() => playSound(1000, 0.1, 'sine'), 100);
+            setTimeout(() => playSound(1200, 0.2, 'sine'), 200);
+        }
+        
+        // コンボ音
+        function playComboSound(comboCount) {
+            const baseFreq = 600 + (comboCount * 100);
+            playSound(baseFreq, 0.15, 'triangle');
         }
 
         // 敗北音
