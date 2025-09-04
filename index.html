@@ -73,7 +73,7 @@
         <div class="score">スコア: <span id="score">0</span></div>
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         <div class="controls">
-            ← → キーで移動、スペースキーで蜂を撃退！
+            ← → キーで移動、スペースキーでスプレー噴射！
         </div>
         <div id="gameOver" class="game-over" style="display: none;">
             蜂に負けた！
@@ -368,9 +368,25 @@
                 ctx.fillStyle = `rgba(139, 0, 0, ${0.3 + Math.sin(animationTime * 0.3) * 0.2})`;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
-                // プレイヤーを描画
-                ctx.fillStyle = player.color;
-                ctx.fillRect(player.x, player.y, player.width, player.height);
+                // プレイヤー（スプレー缶）を描画
+                const centerX = player.x + player.width / 2;
+                const centerY = player.y + player.height / 2;
+                
+                // スプレー缶の本体
+                ctx.fillStyle = '#999999'; // ダークシルバー（ゲームオーバー時）
+                ctx.beginPath();
+                ctx.ellipse(centerX, centerY + 5, player.width/3, player.height/2, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // キャップ
+                ctx.fillStyle = '#800000'; // ダークレッド
+                ctx.beginPath();
+                ctx.ellipse(centerX, centerY - 8, player.width/4, player.height/6, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // ノズル
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(centerX - 2, centerY - 15, 4, 8);
                 
                 // 蜂のようなインベーダーを描画（ゲームオーバー時）
                 for (let invader of invaders) {
@@ -451,27 +467,72 @@
             // 背景をクリア
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // プレイヤーを描画
-            ctx.fillStyle = player.color;
-            ctx.fillRect(player.x, player.y, player.width, player.height);
+            // プレイヤー（スプレー缶）を描画
+            const centerX = player.x + player.width / 2;
+            const centerY = player.y + player.height / 2;
             
-            // プレイヤーの詳細を描画
-            ctx.fillStyle = '#FFE4B5';
-            ctx.fillRect(player.x + 20, player.y + 5, 10, 10);
+            // スプレー缶の本体（縦長の楕円）
+            ctx.fillStyle = '#C0C0C0'; // シルバー
+            ctx.beginPath();
+            ctx.ellipse(centerX, centerY + 5, player.width/3, player.height/2, 0, 0, Math.PI * 2);
+            ctx.fill();
             
-            // 弾丸を描画
+            // スプレー缶の上部（キャップ）
+            ctx.fillStyle = '#FF0000'; // 赤いキャップ
+            ctx.beginPath();
+            ctx.ellipse(centerX, centerY - 8, player.width/4, player.height/6, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // ノズル
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(centerX - 2, centerY - 15, 4, 8);
+            
+            // ラベル
+            ctx.fillStyle = '#FFD700';
+            ctx.fillRect(centerX - player.width/4, centerY, player.width/2, player.height/4);
+            
+            // ラベルのテキスト
+            ctx.fillStyle = '#000000';
+            ctx.font = '8px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('BEE', centerX, centerY + 6);
+            ctx.fillText('AWAY', centerX, centerY + 14);
+            
+            // スプレーの液体を描画
             if (bullet) {
-                // メインの弾丸（赤色）
-                ctx.fillStyle = bullet.color;
-                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+                // スプレー液体のメイン部分（液滴状）
+                const bulletCenterX = bullet.x + bullet.width / 2;
+                const bulletCenterY = bullet.y + bullet.height / 2;
                 
-                // 弾丸の光沢効果（明るい赤）
-                ctx.fillStyle = '#FF6666';
-                ctx.fillRect(bullet.x + 1, bullet.y, bullet.width - 2, bullet.height);
+                // メインの液滴（半透明の毒々しい緑）
+                ctx.fillStyle = 'rgba(50, 255, 50, 0.8)';
+                ctx.beginPath();
+                ctx.ellipse(bulletCenterX, bulletCenterY, bullet.width/2, bullet.height/2, 0, 0, Math.PI * 2);
+                ctx.fill();
                 
-                // 中央のハイライト（白）
-                ctx.fillStyle = '#FFFFFF';
-                ctx.fillRect(bullet.x + 2, bullet.y, 2, bullet.height);
+                // 液体の核心部分（濃い緑）
+                ctx.fillStyle = 'rgba(0, 200, 0, 0.9)';
+                ctx.beginPath();
+                ctx.ellipse(bulletCenterX, bulletCenterY, bullet.width/3, bullet.height/3, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // ハイライト（白い光沢）
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.beginPath();
+                ctx.ellipse(bulletCenterX - 1, bulletCenterY - 1, bullet.width/4, bullet.height/4, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // スプレーの霧効果（周りの小さな粒子）
+                ctx.fillStyle = 'rgba(50, 255, 50, 0.3)';
+                for (let i = 0; i < 3; i++) {
+                    const angle = (Math.PI * 2 / 3) * i + animationFrame * 0.1;
+                    const distance = 8;
+                    const particleX = bulletCenterX + Math.cos(angle) * distance;
+                    const particleY = bulletCenterY + Math.sin(angle) * distance;
+                    ctx.beginPath();
+                    ctx.arc(particleX, particleY, 1, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
             
             // 蜂のようなインベーダーを描画
