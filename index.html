@@ -106,6 +106,9 @@
 
         // 弾丸
         let bullet = null;
+        
+        // 蜂の針
+        let beeStingers = [];
 
         // インベーダー
         const invaders = [];
@@ -132,6 +135,36 @@
                         points: (3 - (row % 4)) * 10 + 10 // 上の段ほど高得点
                     });
                 }
+            }
+        }
+
+        // 蜂の針クラス
+        class BeeStinger {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 3;
+                this.height = 12;
+                this.speed = 2;
+                this.color = '#8B4513';
+            }
+            
+            update() {
+                this.y += this.speed;
+            }
+            
+            draw() {
+                // 針の本体（茶色）
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                
+                // 針の先端（黒）
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(this.x, this.y + this.height - 3, this.width, 3);
+                
+                // 針の光沢
+                ctx.fillStyle = '#D2691E';
+                ctx.fillRect(this.x + 1, this.y, 1, this.height - 2);
             }
         }
 
@@ -171,6 +204,13 @@
             setTimeout(() => playSound(659, 0.2, 'sine'), 200); // ミ
             setTimeout(() => playSound(784, 0.2, 'sine'), 400); // ソ
             setTimeout(() => playSound(1047, 0.4, 'sine'), 600); // 高いド
+        }
+        
+        // ゲームオーバー音
+        function playGameOverSound() {
+            playSound(300, 0.3, 'sawtooth'); // 低い音
+            setTimeout(() => playSound(250, 0.3, 'sawtooth'), 200); // もっと低い音
+            setTimeout(() => playSound(200, 0.5, 'sawtooth'), 400); // 最低音
         }
 
         // 敗北音
@@ -255,6 +295,30 @@
                     invader.x += invaderSpeed;
                 }
             }
+            
+            // 蜂が針を発射する（ランダムに）
+            if (Math.random() < 0.008) { // 針発射の確率を調整
+                const aliveBees = invaders.filter(invader => invader.alive);
+                if (aliveBees.length > 0) {
+                    const randomBee = aliveBees[Math.floor(Math.random() * aliveBees.length)];
+                    const stingerX = randomBee.x + randomBee.width / 2 - 1.5;
+                    const stingerY = randomBee.y + randomBee.height;
+                    beeStingers.push(new BeeStinger(stingerX, stingerY));
+                }
+            }
+        }
+
+        // 蜂の針の更新
+        function updateBeeStingers() {
+            for (let i = beeStingers.length - 1; i >= 0; i--) {
+                const stinger = beeStingers[i];
+                stinger.update();
+                
+                // 画面外に出た針を削除
+                if (stinger.y > canvas.height) {
+                    beeStingers.splice(i, 1);
+                }
+            }
         }
 
         // 衝突検出
@@ -282,6 +346,26 @@
                         playVictorySound();
                         showVictoryAnimation();
                     }
+                    break;
+                }
+            }
+            
+            // 蜂の針とプレイヤーの衝突検出
+            for (let i = beeStingers.length - 1; i >= 0; i--) {
+                const stinger = beeStingers[i];
+                
+                if (stinger.x < player.x + player.width &&
+                    stinger.x + stinger.width > player.x &&
+                    stinger.y < player.y + player.height &&
+                    stinger.y + stinger.height > player.y) {
+                    
+                    // プレイヤーが針に刺された
+                    gameRunning = false;
+                    playGameOverSound();
+                    showGameOverAnimation();
+                    
+                    // 針を削除
+                    beeStingers.splice(i, 1);
                     break;
                 }
             }
@@ -616,6 +700,11 @@
                 ctx.arc(centerX + 3, centerY - 9, 1, 0, Math.PI * 2);
                 ctx.fill();
             }
+            
+            // 蜂の針を描画
+            for (let stinger of beeStingers) {
+                stinger.draw();
+            }
         }
 
         // ゲームループ
@@ -626,6 +715,7 @@
             updatePlayer();
             updateBullet();
             updateInvaders();
+            updateBeeStingers();
             checkCollisions();
             checkGameOver();
             draw();
@@ -641,6 +731,7 @@
             scoreElement.textContent = score;
             gameOverElement.style.display = 'none';
             bullet = null;
+            beeStingers = []; // 針もクリア
             player.x = canvas.width / 2 - 25;
             invaderSpeed = 1; // スピードもリセット
             initInvaders();
