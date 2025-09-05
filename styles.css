@@ -1,0 +1,62 @@
+/* ビー・シューター - スタイルシート */
+
+body {
+    margin: 0;
+    padding: 20px;
+    background: linear-gradient(135deg, #87CEEB, #98FB98);
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.game-container {
+    text-align: center;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+canvas {
+    border: 3px solid #FFD700;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #87CEFA, #F0F8FF);
+}
+
+.score {
+    font-size: 24px;
+    color: #FF6347;
+    margin: 10px 0;
+    font-weight: bold;
+}
+
+.controls {
+    margin-top: 15px;
+    color: #4169E1;
+    font-size: 16px;
+}
+
+.game-over {
+    font-size: 28px;
+    color: #FF4500;
+    margin: 20px 0;
+    font-weight: bold;
+}
+
+button {
+    background: #32CD32;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    font-size: 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    margin: 10px;
+    transition: background 0.3s;
+}
+
+button:hover {
+    background: #228B22;
+}
